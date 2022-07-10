@@ -1,0 +1,245 @@
+package com.sample.rules
+
+import com.sample.AirQualitySensor
+import com.sample.MediaCenter
+import com.sample.MotionSensor
+import com.sample.SmartDevice
+import com.sample.SmartSpeaker
+import com.sample.User
+
+/* Rule number 1: Work Environment Not recommended
+The rule deals with identifying an unsuitable work environment and reporting it to the user (ex. via telephone notification).
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- The air quality sensor detects a quality not recommended for working;
+- The previous point has not already been reported;
+- The motion sensor is detecting the presence of someone in front of the desk.
+
+*/
+rule "Work Environment Not recommended"
+
+	when
+	
+		User(isAtHome()) && 
+		$a: AirQualitySensor(!isAir_status() && !isReported()) &&
+		MotionSensor(isRecent_movement())
+	
+	then
+	
+		$a.setReported(true);
+		System.out.println("\nPoor air quality reported\n");
+end
+
+
+/* Rule number 2: Work Environment Available
+The rule deals with identifying a suitable work environment and reporting it to the user (ex. via telephone notification).
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- The air quality sensor detects a quality recommended for working;
+- the previous point is the result of a previous report.
+
+*/
+rule "Work Environment Available"
+
+	when
+	
+		User(isAtHome()) &&
+		$a: AirQualitySensor(isAir_status() && isReported())
+	
+	then
+		
+		$a.setReported(false);
+		System.out.println("\nSufficient air quality reported\n");
+	
+end
+
+
+/* Rule number 3: Ambient work On
+The rule deals with identifying the presence of someone in front of the desk and proposing a comfortable work environment.
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- The motion sensor is detecting the presence of someone in front of the desk;
+
+*/
+rule "Ambient work On"
+
+	when
+		MotionSensor(isRecent_movement()) &&
+		User(isAtHome()) && $s: SmartSpeaker()
+	
+	then
+		insertLogical( new SmartDevice("Presa Smart Monitor"));
+		System.out.println("Monitor On");
+		insertLogical(new SmartDevice("Lampada Smart Desk"));
+		System.out.println("Desk light On");
+		$s.setPlaying_music(true);
+		System.out.println("Playing LOFI PlayList on SmartSpeker");
+		System.out.println("Ambient Work On");
+		
+end
+
+
+/* Rule number 4: Ambient work Off
+The rule has the objective of identifying the absence of someone in front of the desk and consequently of deactivating the work environment if previously activated.
+
+The rule is activated when the following facts occur:
+- The motion sensor does not detect someone's presence;
+- The working environment is active.
+
+*/
+rule "Ambient work Off"
+
+	when
+		MotionSensor(!isRecent_movement()) &&
+		$s: SmartSpeaker(isPlaying_music()) //&&
+		//$p: SmartDevice(name == "Presa Smart Monitor") &&
+		//$l: SmartDevice(name == "Lampada Smart Desk")
+	
+	then
+		//retract($p);
+		System.out.println("Monitor Off");
+		//retract($l);
+		System.out.println("Desk light Off");
+		$s.setPlaying_music(false);
+		System.out.println("Music playback stopped");
+		System.out.println("Ambient Work Off");
+		
+end
+
+
+/* Rule number 5: Unwanted presence at the desk
+The rule has the objective of identifying the non-presence of someone in front of the desk in relation to the non-presence of the user in the room, 
+and in case of reporting it to the user (ex. via telephone notification).
+
+The rule is activated when the following facts occur:
+- User is not present inside the room;
+- The motion sensor is detecting the presence of someone in front of the desk.
+
+*/
+rule "Unwanted presence at the desk"
+
+	when
+		MotionSensor(isRecent_movement()) &&
+		User(!isAtHome())
+	
+	then
+		System.out.println("Unwanted presence at the desk reported to the User");
+		
+end
+
+
+/* Rule number 6: Speakers On
+The rule aims to identify the presence of a device that is reproducing audio so as to activate the speakers and provide a better environment.
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- A device is reproducing audio.
+
+*/
+rule "Speakers On"
+
+	when
+		(MediaCenter(isPlaying_movie()) || SmartSpeaker(isPlaying_music())) &&
+		//SmartSpeaker(isPlaying_music()) &&
+		//MediaCenter(isPlaying_movie()) && 
+		User(isAtHome()) 
+	
+	then
+		//insertLogical( new SmartDevice("Presa Smart Speaker"));
+		insert( new SmartDevice("Presa Smart Speaker"));
+		System.out.println("Speakers On");
+		
+end
+
+
+/* Rule number 7: Speakers Off
+the rule has the objective of identifying the absence of the user so as to deactivate the unused speakers.
+
+The rule is activated when the following facts occur:
+- There is an unused speaker;
+- User is not present inside the room.
+
+*/
+rule "Speakers Off"
+
+	when
+		User(!isAtHome())
+		&& $s: SmartDevice(name == "Presa Smart Speaker") 
+	
+	then
+		retract($s);
+		System.out.println("Speakers Off");
+		
+end
+
+
+/* Rule number 8: Movie ambient On
+The rule has the objective of identifying the presence of a media center that is playing a movie in order to activate the suitable environment.
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- A media center is reproducing a movie.
+
+*/
+rule "Movie ambient On"
+
+	when
+		User(isAtHome()) &&
+		MediaCenter(isPlaying_movie())
+	
+	then
+		//insertLogical( new SmartDevice("Presa Smart TV Light"));
+		insert( new SmartDevice("Presa Smart TV Light"));		
+		System.out.println("TV Light On");
+		System.out.println("Ambient Movie On");
+		
+end
+
+
+/* Rule number 9: Movie ambient Off
+The rule has the objective of identifying the absence of a media center that is playing a movie in order to deactivate the suitable environment.
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- A media center is reproducing a movie.
+
+*/
+rule "Movie ambient Off"
+
+	when
+		User(!isAtHome()) &&
+		MediaCenter(isPlaying_movie()) &&
+		$s: SmartDevice(name == "Presa Smart TV Light")
+	
+	then
+		retract($s);		
+		System.out.println("TV Light Off");
+		System.out.println("Ambient Movie Off");
+		
+end
+
+
+/* Rule number 10: Wake Up Ambient
+The rule aims to identify a SmartSpeaker that is ringing an alarm so as to create the right environment.
+
+The rule is activated when the following facts occur:
+- User is present inside the room;
+- A SmartSpeaker is ringing an alarm.
+
+*/
+rule "Wake Up Ambient"
+
+	when
+		User(isAtHome()) &&
+		SmartSpeaker(isRinging_alarm())
+	
+	then
+		insertLogical( new SmartDevice("Smart ceiling light"));
+		System.out.println("Soft ceiling light On");
+		System.out.println("Wake Up Ambient");
+		
+end
+
